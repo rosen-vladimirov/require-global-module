@@ -1,0 +1,1 @@
+console.log("IN CHILD: ", require(process.argv[2]));
