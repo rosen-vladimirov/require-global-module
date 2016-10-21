@@ -72,7 +72,42 @@ if (platform === "win32") {
 	childProc.on("error", d => console.log(d.toString()));
 
 } else if (platform === "darwin") {
+	// There are two ways to find where's the global directory for package installation:
 
+	// First one is to get it from npm config:
+	let npmConfigPrefix = childProcess.execSync("npm config get prefix").toString().trim();
+
+	// On Mac OS X the path is:
+	let globalNodeModulesDir = path.join(npmConfigPrefix, "lib", "node_modules");
+	let pathToLib = path.join(globalNodeModulesDir, packageName);
+	console.log(`Path to ${executableName} is ${pathToLib}`);
+	console.log("Result when path is constructed via npm confg:", require(pathToLib));
+
+	// Second way to find it is to use the result of which command
+	// It will give path to the executable, which is a symlink in fact, so we can get the full path from it:
+
+	let whichResult = childProcess.execSync("which mobile-cli-lib").toString().trim(),
+		lsLResult = childProcess.execSync("ls -l `which mobile-cli-lib`").toString().trim();
+
+	let regex = new RegExp(`${whichResult}\\s+\-\>\\s+(.*?)$`);
+
+	let match = lsLResult.match(regex);
+	if (match && match[1]) {
+		let pathToRealExecutable = path.join(path.dirname(whichResult), match[1]),
+			pathToGlobalNodeModulesDir = pathToRealExecutable.match(new RegExp(`(.*?${path.join("node_modules", packageName)}).*$`))[1];
+
+		console.log("Result when path is constructed with which and ls command", require(pathToGlobalNodeModulesDir));
+	}
+
+	// No matter how we construct the path to global node_modules dir, we can use it to set NODE_PATH environment variable
+	// After that we can start new process and we'll be able to require our module.
+	let nodePath = globalNodeModulesDir,
+		opts = { env: { NODE_PATH: nodePath }};
+
+	let childProc = childProcess.spawn(process.execPath, ["node-path.js", packageName], opts);
+	childProc.stdout.on("data", d => console.log(d.toString()));
+	childProc.stderr.on("data", d => console.log(d.toString()));
+	childProc.on("error", d => console.log(d.toString()));
 } else {
 	throw new Error(`Unknow platform: ${platform}`);
 }
